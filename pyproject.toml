@@ -9,4 +9,5 @@ requires-python = ">=3.12"
 dependencies = [
     "mediapipe<0.11",  # 1.1.1 hangs in HandLandmarker.create_from_options on this machine
     "opencv-python>=5.0.0.93",
+    "websockets>=17.3",
 ]

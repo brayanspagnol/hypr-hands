@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>hypr-hands</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; color: #0ff; font: 16px monospace; overflow: hidden; }
+  video, canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; transform: scaleX(-1); }
+  #stats { position: absolute; top: 8px; left: 8px; background: #000a; padding: 4px 8px; }
+  #start { position: absolute; inset: 0; margin: auto; width: 60%; height: 80px; font-size: 24px; }
+</style>
+</head>
+<body>
+<video id="video" playsinline muted></video>
+<canvas id="canvas"></canvas>
+<div id="stats">carregando…</div>
+<button id="start" hidden>Iniciar câmera</button>
+<script type="module">
+import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/vision_bundle.mjs";
+
+const video = document.getElementById("video");
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+const stats = document.getElementById("stats");
+const startBtn = document.getElementById("start");
+
+let ws;
+function connect() {
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onclose = () => setTimeout(connect, 1000);
+}
+connect();
+
+const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm");
+const landmarker = await HandLandmarker.createFromOptions(vision, {
+  baseOptions: { modelAssetPath: "/hand_landmarker.task", delegate: "GPU" },
+  runningMode: "VIDEO",
+  numHands: 1,
+});
+
+async function start() {
+  startBtn.hidden = true;
+  video.srcObject = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30 } },
+    audio: false,
+  });
+  await video.play();
+  try { await navigator.wakeLock.request("screen"); } catch {}
+  requestAnimationFrame(loop);
+}
+
+let lastVideoTime = -1, frames = 0, inferSum = 0, tStats = performance.now();
+function loop() {
+  requestAnimationFrame(loop);
+  if (video.currentTime === lastVideoTime) return;
+  lastVideoTime = video.currentTime;
+
+  const t = performance.now();
+  const res = landmarker.detectForVideo(video, t);
+  inferSum += performance.now() - t;
+  frames++;
+
+  const hand = res.landmarks[0] ? res.landmarks[0].map(p => [p.x, p.y]) : null;
+  if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ hand }));
+
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#f00";
+  for (const [x, y] of hand || []) ctx.fillRect(x * canvas.width - 3, y * canvas.height - 3, 6, 6);
+
+  const now = performance.now();
+  if (now - tStats > 1000) {
+    const ws_state = ws.readyState === WebSocket.OPEN ? "PC ok" : "PC desconectado";
+    stats.textContent = `${video.videoWidth}x${video.videoHeight}  ${(frames * 1000 / (now - tStats)).toFixed(1)} fps  infer ${(inferSum / frames).toFixed(1)} ms  ${ws_state}`;
+    frames = 0; inferSum = 0; tStats = now;
+  }
+}
+
+// Autoplay with camera may need a tap; try directly first.
+start().catch(() => { startBtn.hidden = false; stats.textContent = "toque para iniciar"; });
+startBtn.onclick = () => start().catch(e => stats.textContent = "erro: " + e.message);
+</script>
+</body>
+</html>
