@@ -22,6 +22,8 @@ MODEL = ROOT / "models" / "hand_landmarker.task"
 PHONE_PORT = 8765
 # Fraction of the camera frame that maps to the whole monitor, so you don't have to reach the frame edges.
 ACTIVE = (0.2, 0.2, 0.8, 0.8)
+# Seconds of motion prediction to hide camera + inference + glide latency on fast moves.
+LEAD = 0.06
 
 
 class OneEuro:
@@ -70,6 +72,39 @@ class Hypr:
             if m["name"] == name or (name is None and m["focused"]):
                 return m
         raise SystemExit(f"monitor not found: {name}; have {[m['name'] for m in mons]}")
+
+
+class Glide:
+    """Moves the cursor toward the latest target at the monitor refresh rate, so ~25 fps hand updates don't look steppy."""
+
+    def __init__(self, hypr, hz, tau=0.025):
+        self.hypr, self.period, self.tau = hypr, 1 / hz, tau
+        self.target = self.pos = None
+        threading.Thread(target=self._loop, daemon=True).start()
+
+    def _loop(self):
+        last, t_prev = None, time.perf_counter()
+        while True:
+            time.sleep(self.period)
+            t = time.perf_counter()
+            dt, t_prev = t - t_prev, t
+            target = self.target
+            if target is None:
+                self.pos = None
+                continue
+            if self.pos is None:
+                cur = json.loads(self.hypr.cmd("j/cursorpos"))
+                self.pos = (float(cur["x"]), float(cur["y"]))
+            k = 1 - math.exp(-dt / self.tau)
+            self.pos = tuple(p + (q - p) * k for p, q in zip(self.pos, target))
+            xy = tuple(round(p) for p in self.pos)
+            if xy != last:
+                # Hyprland 0.56 dispatchers are Lua; the old "movecursor x y" form is rejected.
+                reply = self.hypr.cmd(f"dispatch hl.dsp.cursor.move({{x={xy[0]},y={xy[1]}}})").strip()
+                if reply != "ok":
+                    print(f"hyprland rejected cursor move: {reply}", flush=True)
+                    os._exit(1)
+                last = xy
 
 
 def is_pointing(lm):
@@ -162,18 +197,19 @@ def main():
     video = int(args.video) if args.video.isdigit() else args.video
     frames = pc_source(video) if args.source == "pc" else phone_source()
 
-    fx, fy = OneEuro(), OneEuro()
-    last_pos, n, t_report = None, 0, time.perf_counter()
+    # beta is in normalized frame units per second: high enough that fast moves don't lag.
+    fx, fy = OneEuro(min_cutoff=0.8, beta=8.0), OneEuro(min_cutoff=0.8, beta=8.0)
+    glide = Glide(hypr, mon["refreshRate"])
+    n, t_report = 0, time.perf_counter()
     for lm, t in frames:
         n += 1
         if lm and is_pointing(lm):
-            x, y = to_screen(fx(lm[8][0], t), fy(lm[8][1], t), mon, args.mirror)
-            if (x, y) != last_pos:
-                # Hyprland 0.56 dispatchers are Lua; the old "movecursor x y" form is rejected.
-                reply = hypr.cmd(f"dispatch hl.dsp.cursor.move({{x={x},y={y}}})")
-                if reply.strip() != "ok":
-                    raise SystemExit(f"hyprland rejected cursor move: {reply.strip()}")
-                last_pos = (x, y)
+            # Aim where the finger will be LEAD seconds from now, using the filter's velocity estimate.
+            x, y = fx(lm[8][0], t), fy(lm[8][1], t)
+            glide.target = to_screen(x + fx.dx * LEAD, y + fy.dx * LEAD, mon, args.mirror)
+            t_point = t
+        elif glide.target and t - t_point > 0.15:  # ignore one-frame detection flickers
+            glide.target = None
         if t - t_report >= 2:
             print(f"{n / (t - t_report):4.1f} fps  hand={'yes' if lm else 'no '}  pointing={bool(lm and is_pointing(lm))}")
             n, t_report = 0, t

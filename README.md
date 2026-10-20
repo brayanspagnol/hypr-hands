@@ -14,6 +14,8 @@ MediaPipe finds the hand landmarks, and the script drives Hyprland through its I
    (`ffc=on` is the selfie camera; `upsidedown` matches the phone's position on the tripod.)
 5. Model (not in git):
    `curl -fLo models/hand_landmarker.task https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task`
-6. Run: `uv run f0_view.py` (phone) or `uv run f0_view.py 0` (laptop webcam).
+6. Keep the phone screen on while on USB (IP Webcam stops sending frames when it turns off):
+   `adb shell svc power stayon usb`
+7. Run: `uv run f0_view.py` (phone) or `uv run f0_view.py 0` (laptop webcam).
 
 See ROADMAP.md for the plan.
