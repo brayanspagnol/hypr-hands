@@ -33,4 +33,8 @@ Machine: Intel Raptor Lake iGPU, monitors eDP-1 1920x1080 + HDMI-A-1 3440x1440.
 - mediapipe pinned `<0.11`: 1.1.1 hangs in `HandLandmarker.create_from_options` here; 0.10.35 works.
 - Laptop webcam 640x480, no hand in view: inference median 61 ms, max 107 ms (palm detector runs
   every frame when no hand is tracked). To check with a hand in view and with the phone feed.
-- Phone (Motorola, USB id 22b8:2e82) seen on USB, not yet by adb: USB debugging still off.
+- Phone: motorola edge 20, Android 13, adb over USB, `adb forward tcp:8090 tcp:8080` (local 8080 is
+  taken by ps2-web serve.py). Stream set to 640x480 through IP Webcam's
+  `/settings/video_size?set=640x480` (1920x1080 by default cost decode time: 16 fps loop).
+- Phone at 640x480: raw stream 60 fps; with inference and no hand in view, loop 23 fps, inference
+  median 41 ms. Inference is the bottleneck. To measure with a hand tracked.

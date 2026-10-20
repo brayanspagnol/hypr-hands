@@ -13,7 +13,7 @@ import mediapipe as mp
 from mediapipe.tasks.python import BaseOptions, vision
 
 MODEL = Path(__file__).parent / "models" / "hand_landmarker.task"
-DEFAULT_SOURCE = "http://127.0.0.1:8080/video"
+DEFAULT_SOURCE = "http://127.0.0.1:8090/video"
 CONNECTIONS = [(c.start, c.end) for c in vision.HandLandmarksConnections.HAND_CONNECTIONS]
 
 
