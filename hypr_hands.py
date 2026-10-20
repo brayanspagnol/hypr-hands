@@ -20,8 +20,11 @@ from pathlib import Path
 ROOT = Path(__file__).parent
 MODEL = ROOT / "models" / "hand_landmarker.task"
 PHONE_PORT = 8765
-# Fraction of the camera frame that maps to the whole monitor, so you don't have to reach the frame edges.
-ACTIVE = (0.2, 0.2, 0.8, 0.8)
+# Fraction of the camera frame width that maps to the monitor width, so you don't have to reach the frame
+# edges. The height follows the monitor's aspect so the cursor moves equally fast in both axes.
+ACTIVE_W = 0.6
+# shortcut: both sources send 640x480 frames; pass the real aspect if a source ever differs.
+FRAME_ASPECT = 4 / 3
 # Seconds of motion prediction to hide camera + inference + glide latency on fast moves.
 LEAD = 0.06
 
@@ -113,12 +116,12 @@ def is_pointing(lm):
 
 
 def to_screen(x, y, mon, mirror):
-    x0, y0, x1, y1 = ACTIVE
-    u = min(max((x - x0) / (x1 - x0), 0.0), 1.0)
-    v = min(max((y - y0) / (y1 - y0), 0.0), 1.0)
+    w, h = mon["width"] / mon["scale"], mon["height"] / mon["scale"]
+    active_h = ACTIVE_W * (h / w) * FRAME_ASPECT
+    u = min(max((x - 0.5) / ACTIVE_W + 0.5, 0.0), 1.0)
+    v = min(max((y - 0.5) / active_h + 0.5, 0.0), 1.0)
     if mirror:
         u = 1 - u
-    w, h = mon["width"] / mon["scale"], mon["height"] / mon["scale"]
     return round(mon["x"] + u * (w - 1)), round(mon["y"] + v * (h - 1))
 
 

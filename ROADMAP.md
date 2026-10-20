@@ -12,7 +12,7 @@ Machine: Intel Raptor Lake iGPU, monitors eDP-1 1920x1080 + HDMI-A-1 3440x1440.
 ## Phases
 
 - **F0 spike**: feed + hand skeleton + FPS/inference time (`f0_view.py`). Measure phone latency.
-- **F1 cursor**: index fingertip drives `movecursor`; calibration (usable camera rectangle to
+- **F1 cursor** (done 2026-10-20): index fingertip drives `movecursor`; calibration (usable camera rectangle to
   screen area), One Euro filter smoothing, both monitors.
 - **F2 grab and drag**: thumb-index pinch with hysteresis scaled by hand size grabs the window
   under the cursor (made floating), `movewindowpixel` every frame, release on open hand.
@@ -26,7 +26,6 @@ Machine: Intel Raptor Lake iGPU, monitors eDP-1 1920x1080 + HDMI-A-1 3440x1440.
 - Swipe to change workspace; fist to send to special workspace or close.
 - Use landmark depth (z) to push/pull and restack windows.
 - HUD overlay (layer-shell) with the hand skeleton and the grabbed window highlighted.
-- Run MediaPipe on the phone and send only landmarks over WebSocket (less latency, free PC CPU).
 
 ## Status (2026-10-20)
 
@@ -38,3 +37,15 @@ Machine: Intel Raptor Lake iGPU, monitors eDP-1 1920x1080 + HDMI-A-1 3440x1440.
   `/settings/video_size?set=640x480` (1920x1080 by default cost decode time: 16 fps loop).
 - Phone at 640x480: raw stream 60 fps; with inference and no hand in view, loop 23 fps, inference
   median 41 ms. Inference is the bottleneck. To measure with a hand tracked.
+
+## Status (2026-10-20, F1 done)
+
+- `hypr_hands.py pc|phone` drives the cursor while pointing (index up, middle folded).
+  - pc: MediaPipe on the laptop over the IP Webcam stream, ~25-30 fps.
+  - phone: `phone.html` runs MediaPipe (tasks-vision 0.10.35, GPU delegate) in the phone's Chrome,
+    served through `adb reverse tcp:8765`; ~23 fps, 43 ms inference on the phone. The user found it
+    better than pc mode. IP Webcam must be stopped (camera is exclusive).
+- Smoothing: One Euro (min_cutoff 0.8, beta 8), 60 ms motion prediction, glide thread at monitor
+  refresh (tau 25 ms). Active area: 0.6 of frame width, height from monitor aspect (equal gain).
+- Hyprland 0.56 dispatchers are Lua: `hl.dsp.cursor.move({x=..,y=..})`; old syntax errors out.
+- Open: phone inference on CPU vs GPU delegate not compared; requestVideoFrameCallback not tried.

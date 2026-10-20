@@ -3,11 +3,16 @@ from hypr_hands import OneEuro, is_pointing, to_screen
 
 MON = {"x": 0, "y": -2000, "width": 1920, "height": 1080, "scale": 1}
 
-# Active area corners map to monitor corners; outside is clamped; mirror flips x.
-assert to_screen(0.2, 0.2, MON, False) == (0, -2000)
-assert to_screen(0.8, 0.8, MON, False) == (1919, -921)
-assert to_screen(0.0, 1.0, MON, False) == (0, -921)
+# Active area: 0.6 of the frame width spans the monitor width; height follows the monitor aspect,
+# so one unit of hand motion moves the cursor the same distance in both axes.
+assert to_screen(0.2, 0.5, MON, False) == (0, -1460)
+assert to_screen(0.8, 0.5, MON, False) == (1919, -1460)
+assert to_screen(0.0, 1.0, MON, False) == (0, -921)  # clamped
 assert to_screen(0.2, 0.5, MON, True) == (1919, -1460)
+WIDE = {"x": 0, "y": 0, "width": 3440, "height": 1440, "scale": 1}
+dx = to_screen(0.55, 0.5, WIDE, False)[0] - to_screen(0.5, 0.5, WIDE, False)[0]
+dy = to_screen(0.5, 0.5 + 0.05 * 4 / 3, WIDE, False)[1] - to_screen(0.5, 0.5, WIDE, False)[1]
+assert abs(dx - dy) <= 2, (dx, dy)  # same physical hand distance (4:3 frame) gives same cursor distance
 
 # Pointing: index tip (8) above its PIP (6), middle tip (12) below its PIP (10).
 hand = [(0.5, 0.5)] * 21
