@@ -19,3 +19,8 @@ MediaPipe finds the hand landmarks, and the script drives Hyprland through its I
 7. Run: `uv run f0_view.py` (phone) or `uv run f0_view.py 0` (laptop webcam).
 
 See ROADMAP.md for the plan.
+
+## Tests
+
+The pure logic (smoothing, gestures, screen mapping) has assert-based self-checks:
+`uv run test_hypr_hands.py`
